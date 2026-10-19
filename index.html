@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cadastro de Alunos</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Arial, sans-serif; }
+    body { background: linear-gradient(135deg, #667eea, #764ba2); min-height: 100vh; display: flex; justify-content: center; align-items: flex-start; padding: 40px 16px; }
+    .container { width: 100%; max-width: 720px; }
+    .card { background: #fff; border-radius: 12px; padding: 32px; box-shadow: 0 10px 30px rgba(0,0,0,.2); margin-bottom: 24px; }
+    h1 { font-size: 1.5rem; color: #333; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    .field.full { grid-column: 1 / -1; }
+    label { font-size: .85rem; font-weight: 600; color: #555; }
+    input, select { padding: 10px 12px; border: 1px solid #ccc; border-radius: 8px; font-size: .95rem; outline: none; }
+    input:focus, select:focus { border-color: #667eea; }
+    button { margin-top: 20px; width: 100%; padding: 12px; border: none; border-radius: 8px; background: #667eea; color: #fff; font-size: 1rem; font-weight: 600; cursor: pointer; }
+    button:hover { background: #5a6fd6; }
+    button:disabled { background: #aaa; cursor: not-allowed; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th, td { padding: 10px; text-align: left; border-bottom: 1px solid #eee; font-size: .9rem; }
+    th { background: #f7f7fb; color: #444; }
+    .msg { margin-top: 12px; padding: 10px; border-radius: 8px; font-size: .9rem; display: none; }
+    .msg.ok { background: #e6f9ec; color: #1e7e34; display: block; }
+    .msg.erro { background: #fdecea; color: #c0392b; display: block; }
+    @media (max-width: 600px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+<base target="_blank">
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <h1>🎓 Cadastro de Alunos</h1>
+      <form id="form-aluno">
+        <div class="grid">
+          <div class="field">
+            <label for="nome">Nome completo *</label>
+            <input type="text" id="nome" required placeholder="Ex.: Maria Silva" />
+          </div>
+          <div class="field">
+            <label for="email">E-mail *</label>
+            <input type="email" id="email" required placeholder="aluno@email.com" />
+          </div>
+          <div class="field">
+            <label for="data_nascimento">Data de nascimento</label>
+            <input type="date" id="data_nascimento" />
+          </div>
+          <div class="field">
+            <label for="telefone">Telefone</label>
+            <input type="tel" id="telefone" placeholder="(00) 90000-0000" />
+          </div>
+          <div class="field full">
+            <label for="curso">Curso</label>
+            <select id="curso">
+              <option value="">Selecione...</option>
+              <option>Engenharia</option>
+              <option>Medicina</option>
+              <option>Direito</option>
+              <option>Ciência da Computação</option>
+              <option>Administração</option>
+              <option>Design</option>
+            </select>
+          </div>
+        </div>
+        <button type="submit" id="btn-salvar">Cadastrar</button>
+        <div id="msg" class="msg"></div>
+      </form>
+    </div>
+
+    <div class="card">
+      <h1>📋 Alunos cadastrados</h1>
+      <table>
+        <thead><tr><th>Nome</th><th>E-mail</th><th>Curso</th></tr></thead>
+        <tbody id="lista-alunos"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- SDK do Supabase -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+  // Tudo dentro de uma função: nada vaza para o escopo global, impossível conflitar
+  (function () {
+    "use strict";
+
+    // Credenciais do projeto
+    const SUPABASE_URL = "https://jutwpacgctuytrfeqwqw.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1dHdwYWNnY3R1eXRyZmVxd3F3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIzODYxMjEsImV4cCI6MjEwNzk2MjEyMX0.cQShP0a9C_BbUNoB6mZ1uysfPTr4wmv6AmMG0p7us58";
+
+    const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    const form = document.getElementById("form-aluno");
+    const btnSalvar = document.getElementById("btn-salvar");
+    const msg = document.getElementById("msg");
+    const lista = document.getElementById("lista-alunos");
+
+    // ---------- Cadastrar aluno ----------
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      btnSalvar.disabled = true;
+      btnSalvar.textContent = "Salvando...";
+      mostrarMsg("", "");
+
+      const aluno = {
+        nome: document.getElementById("nome").value.trim(),
+        email: document.getElementById("email").value.trim(),
+        data_nascimento: document.getElementById("data_nascimento").value || null,
+        telefone: document.getElementById("telefone").value.trim() || null,
+        curso: document.getElementById("curso").value || null
+      };
+
+      const { error } = await db.from("alunos").insert([aluno]);
+
+      if (error) {
+        console.error(error);
+        if (error.code === "23505") {
+          mostrarMsg("Este e-mail já está cadastrado.", "erro");
+        } else {
+          mostrarMsg("Erro ao cadastrar: " + error.message, "erro");
+        }
+      } else {
+        mostrarMsg("Aluno cadastrado com sucesso! ✅", "ok");
+        form.reset();
+        carregarAlunos();
+      }
+
+      btnSalvar.disabled = false;
+      btnSalvar.textContent = "Cadastrar";
+    });
+
+    // ---------- Listar alunos ----------
+    async function carregarAlunos() {
+      const { data, error } = await db
+        .from("alunos")
+        .select("nome, email, curso")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error(error);
+        lista.innerHTML = '<tr><td colspan="3">Erro ao carregar alunos: ' + escapar(error.message) + "</td></tr>";
+        return;
+      }
+
+      if (!data || data.length === 0) {
+        lista.innerHTML = '<tr><td colspan="3">Nenhum aluno cadastrado ainda.</td></tr>';
+        return;
+      }
+
+      lista.innerHTML = data.map(a =>
+        "<tr>" +
+          "<td>" + escapar(a.nome) + "</td>" +
+          "<td>" + escapar(a.email) + "</td>" +
+          "<td>" + escapar(a.curso || "—") + "</td>" +
+        "</tr>"
+      ).join("");
+    }
+
+    // ---------- Helpers ----------
+    function mostrarMsg(texto, tipo) {
+      msg.textContent = texto;
+      msg.className = "msg" + (tipo ? " " + tipo : "");
+    }
+
+    function escapar(str) {
+      return String(str ?? "").replace(/[&<>"']/g, c => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+      }[c]));
+    }
+
+    carregarAlunos();
+  })();
+  </script>
+</body>
+</html>
